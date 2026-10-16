@@ -1,0 +1,2350 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Points de collecte — ICV</title>
+
+  <!-- Anti-cache : empêche le navigateur de garder une ancienne version en cache disque -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
+  <!-- Polices -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Leaflet (carte interactive) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+  <!--
+  Carte hors vendanges — construite à partir de la carte vendanges 2026
+  (même interface, mêmes vues, même script anti-cache).
+  - Horaires de dépôt pouvant varier selon le jour de collecte
+-->
+
+
+  <style>
+    /* ============================================================
+     PALETTE / DESIGN TOKENS — modifier ici pour changer les couleurs
+     ============================================================ */
+    :root {
+      --font: 'Inter', 'Segoe UI', sans-serif;
+      --ink: #2B2118;
+      --ink-soft: #6b5d4f;
+      --wine: #7A1F3D;
+      --wine-dark: #5A1530;
+      --gold: #B8862B;
+      --gold-soft: #E4C77A;
+      --leaf: #4B5842;
+      --paper: #F6F0E4;
+      --card: #FFFDF8;
+      --line: #E4D8C3;
+      --shadow: 0 1px 2px rgba(43, 33, 24, 0.06), 0 8px 24px rgba(43, 33, 24, 0.06);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      background-image:
+        radial-gradient(circle at 100% 0%, rgba(122, 31, 61, 0.05) 0%, transparent 45%),
+        radial-gradient(circle at 0% 100%, rgba(184, 134, 43, 0.06) 0%, transparent 40%);
+      color: var(--ink);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wrap {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    /* ---------- LOGOS EN-TÊTE ---------- */
+    .header-logos {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+      width: 100%;
+      margin: 0 auto 22px;
+    }
+
+    .header-logos a {
+      display: block;
+      line-height: 0;
+      flex: 0 0 auto;
+    }
+
+    .header-logos img {
+      display: block;
+      height: auto;
+      max-width: 100%;
+      object-fit: contain;
+    }
+
+    .header-logos .logo-icv {
+      width: 125px;
+    }
+
+    .header-logos .logo-oenobox {
+      width: 200px;
+    }
+
+    /* ---------- EN-TÊTE ---------- */
+    header.top {
+      padding: 42px 24px 40px;
+      text-align: center;
+      position: relative;
+    }
+
+    .eyebrow {
+      font-family: var(--font);
+      font-size: 12.5px;
+      letter-spacing: 0.1em;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--wine);
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      font-family: var(--font);
+      font-weight: 800;
+      font-size: clamp(32px, 5vw, 52px);
+      line-height: 1.05;
+      margin: 0 0 12px;
+      color: var(--ink);
+    }
+
+    h1 em {
+      color: var(--wine);
+      font-style: italic;
+      font-weight: 500;
+    }
+
+    .sub {
+      font-size: 19px;
+      color: var(--ink-soft);
+      max-width: 560px;
+      margin: 0 auto;
+      line-height: 1.55;
+      text-align: center;
+      text-wrap: balance;
+    }
+
+    .vine-rule {
+      width: 72px;
+      height: 3px;
+      margin: 22px auto 0;
+      background: linear-gradient(90deg, var(--gold), var(--wine));
+      border-radius: 3px;
+    }
+
+    .notice-saturday {
+      margin: 10px 0 0;
+      color: red;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    /* ---------- ONGLETS (jours + carte) ---------- */
+    .day-tabs {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin: 40px 0 8px;
+    }
+
+    .day-tab {
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      padding: 11px 20px;
+      border-radius: 999px;
+      border: 1.5px solid var(--line);
+      background: var(--card);
+      color: var(--ink-soft);
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .day-tab:hover {
+      border-color: var(--gold);
+      color: var(--ink);
+    }
+
+    .day-tab.active {
+      background: var(--wine);
+      border-color: var(--wine);
+      color: #fff;
+      box-shadow: var(--shadow);
+    }
+
+    .day-tab .count {
+      opacity: 0.65;
+      font-weight: 500;
+      margin-left: 5px;
+    }
+
+    .day-tab.map-tab {
+      border-color: var(--leaf);
+    }
+
+    .day-tab.map-tab.active {
+      background: var(--leaf);
+      border-color: var(--leaf);
+    }
+
+    /* ---------- FILTRE SECTEUR ---------- */
+    .sector-filter-wrap {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin: 6px 0 30px;
+      flex-wrap: wrap;
+    }
+
+    .sector-filter-label {
+      font-family: var(--font);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ink-soft);
+    }
+
+    .sector-select {
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 9px 16px;
+      border-radius: 999px;
+      border: 1.5px solid var(--line);
+      background: var(--card);
+      color: var(--ink);
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236b5d4f'><path d='M5.5 7.5l4.5 4.5 4.5-4.5z'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      background-size: 14px;
+      padding-right: 34px;
+    }
+
+    .sector-select:hover {
+      border-color: var(--gold);
+    }
+
+    .sector-select:focus {
+      outline: none;
+      border-color: var(--wine);
+    }
+
+    .no-results {
+      text-align: center;
+      color: var(--ink-soft);
+      font-size: 14px;
+      padding: 40px 0;
+    }
+
+    /* ---------- RECHERCHE PAR COMMUNE ---------- */
+    .search-wrap {
+      max-width: 520px;
+      margin: 28px auto 0;
+      position: relative;
+    }
+
+    .search-label {
+      display: block;
+      text-align: center;
+      font-family: var(--font);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ink-soft);
+      margin-bottom: 8px;
+    }
+
+    .search-box {
+      position: relative;
+    }
+
+    .search-input {
+      width: 100%;
+      box-sizing: border-box;
+      font-family: var(--font);
+      font-size: 14px;
+      padding: 12px 40px 12px 18px;
+      border-radius: 999px;
+      border: 1.5px solid var(--line);
+      background: var(--card);
+      color: var(--ink);
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+
+    .search-input:focus {
+      border-color: var(--wine);
+    }
+
+    .search-clear {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(75, 88, 66, 0.1);
+      color: var(--ink-soft);
+      font-size: 12px;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .search-clear:hover {
+      background: rgba(122, 31, 61, 0.12);
+      color: var(--wine);
+    }
+
+    .search-suggestions {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 6px);
+      z-index: 20;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: none;
+    }
+
+    .search-suggestions.open {
+      display: block;
+    }
+
+    .search-suggestion {
+      padding: 11px 18px;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(228, 216, 195, 0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .search-suggestion:last-child {
+      border-bottom: 0;
+    }
+
+    .search-suggestion:hover,
+    .search-suggestion.highlighted {
+      background: rgba(122, 31, 61, 0.06);
+    }
+
+    .search-suggestion .sugg-commune {
+      font-family: var(--font);
+      font-weight: 700;
+      font-size: 13.5px;
+      color: var(--ink);
+    }
+
+    .search-suggestion .sugg-site {
+      font-size: 12px;
+      color: var(--ink-soft);
+    }
+
+    .search-empty {
+      padding: 12px 18px;
+      font-size: 13px;
+      color: var(--ink-soft);
+    }
+
+    #searchResult {
+      margin-top: 18px;
+    }
+
+    #searchResult .site-card {
+      border-color: var(--wine);
+    }
+
+    .helper-text {
+      text-align: center;
+      font-size: 13.5px;
+      color: var(--ink-soft);
+      margin: 18px 0 36px;
+    }
+
+    .helper-text strong {
+      color: var(--wine);
+    }
+
+    /* ---------- FRISE (vue par jour) ---------- */
+    .timeline {
+      position: relative;
+      margin-top: 28px;
+    }
+
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 68px;
+      top: 8px;
+      bottom: 8px;
+      width: 2px;
+      background: repeating-linear-gradient(180deg, var(--gold-soft) 0, var(--gold-soft) 6px, transparent 6px, transparent 12px);
+    }
+
+    .stop {
+      position: relative;
+      display: grid;
+      grid-template-columns: 68px 1fr;
+      gap: 20px;
+      margin-bottom: 18px;
+    }
+
+    .stop-time {
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--wine-dark);
+      text-align: right;
+      padding-top: 16px;
+      position: relative;
+    }
+
+    .stop-time::after {
+      content: '';
+      position: absolute;
+      right: -25px;
+      top: 21px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--gold);
+      border: 2px solid var(--paper);
+      box-shadow: 0 0 0 2px var(--gold);
+    }
+
+    .stop-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px 22px;
+      box-shadow: var(--shadow);
+    }
+
+    .stop-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 6px;
+    }
+
+    .stop-commune {
+      font-family: var(--font);
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .stop-site {
+      font-size: 13.5px;
+      color: var(--wine);
+      font-weight: 500;
+    }
+
+    .stop-addr {
+      font-size: 13px;
+      color: var(--ink-soft);
+      margin: 4px 0 10px;
+    }
+
+    .stop-meta {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      font-size: 13px;
+      color: var(--ink-soft);
+      border-top: 1px dashed var(--line);
+      padding-top: 10px;
+      margin-top: 10px;
+    }
+
+    .stop-meta .label {
+      font-family: var(--font);
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--leaf);
+      font-weight: 700;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .stop-meta .col {
+      flex: 1;
+      min-width: 180px;
+    }
+
+    .particularite {
+      font-size: 13px;
+      color: var(--wine-dark);
+      background: rgba(122, 31, 61, 0.06);
+      border-left: 3px solid var(--wine);
+      padding: 8px 12px;
+      margin-top: 10px;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .particularite .label {
+      font-family: var(--font);
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--wine);
+      font-weight: 700;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    /* ---------- GRILLE (vue "tous les points") ---------- */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 28px;
+    }
+
+    .site-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .site-card .stop-commune {
+      font-size: 18px;
+    }
+
+    .site-card .stop-addr {
+      margin-bottom: 12px;
+    }
+
+    .day-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    .day-badge {
+      font-family: var(--font);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: rgba(75, 88, 66, 0.1);
+      color: var(--leaf);
+    }
+
+    .day-badge b {
+      color: var(--wine-dark);
+      font-weight: 700;
+    }
+
+    /* ---------- CARTE (vue "Carte") ---------- */
+    .map-toolbar {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin: 24px 0 16px;
+    }
+
+    .map-filter {
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--card);
+      color: var(--ink-soft);
+      cursor: pointer;
+    }
+
+    .map-filter:hover {
+      border-color: var(--leaf);
+    }
+
+    .map-filter.active {
+      background: var(--leaf);
+      border-color: var(--leaf);
+      color: #fff;
+    }
+
+    .map-intro {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 16px;
+      margin: 24px 0 12px;
+    }
+
+    .map-intro-title {
+      font-family: var(--font);
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .map-intro-note {
+      font-size: 12.5px;
+      color: var(--ink-soft);
+    }
+
+    #map-container {
+      height: 820px;
+      width: 100%;
+      max-width: 620px;
+      margin: 0 auto;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .map-table-wrap {
+      margin-top: 18px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .map-table-heading {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      padding: 12px 14px 9px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .map-table-title {
+      font-family: var(--font);
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .map-table-count {
+      font-family: var(--font);
+      font-size: 10.5px;
+      color: var(--ink-soft);
+    }
+
+    .table-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .map-table {
+      width: 100%;
+      min-width: 360px;
+      border-collapse: collapse;
+      font-size: 13px;
+      table-layout: fixed;
+    }
+
+    .map-table th {
+      padding: 10px 10px;
+      text-align: left;
+      font-family: var(--font);
+      font-weight: 700;
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--leaf);
+      background: rgba(75, 88, 66, 0.06);
+      border-bottom: 1px solid var(--line);
+      overflow-wrap: break-word;
+    }
+
+    .map-table td {
+      padding: 9px 10px;
+      border-bottom: 1px solid rgba(228, 216, 195, 0.65);
+      vertical-align: top;
+      overflow-wrap: break-word;
+    }
+
+    .map-table tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .map-table tbody tr:hover {
+      background: rgba(122, 31, 61, 0.035);
+    }
+
+    .map-table .num {
+      font-family: var(--font);
+      font-weight: 700;
+      color: var(--wine);
+    }
+
+    .col-num {
+      width: 8%;
+    }
+
+    .col-commune {
+      width: 20%;
+    }
+
+    .col-site {
+      width: 34%;
+    }
+
+    .col-navette {
+      width: 38%;
+    }
+
+    .map-table .commune {
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .map-table .site {
+      color: var(--wine);
+      font-weight: 500;
+    }
+
+    .map-table .days {
+      color: var(--ink-soft);
+    }
+
+    .map-table .hours {
+      color: var(--ink-soft);
+      white-space: nowrap;
+    }
+
+    .map-table .navette {
+      font-family: var(--font);
+      font-weight: 700;
+      color: var(--wine-dark);
+    }
+
+    .map-number {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--wine);
+      color: #fff;
+      border: 2px solid #fff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .leaflet-popup-content-wrapper {
+      border-radius: 10px;
+      font-family: var(--font);
+    }
+
+    .popup-commune {
+      font-family: var(--font);
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--ink);
+    }
+
+    .popup-site {
+      font-size: 12.5px;
+      color: var(--wine);
+      margin: 2px 0 4px;
+    }
+
+    .popup-meta {
+      font-size: 12px;
+      color: var(--ink-soft);
+      margin-top: 4px;
+    }
+
+    .popup-meta .label {
+      font-family: var(--font);
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--leaf);
+    }
+
+    .popup-particularite {
+      font-size: 12px;
+      color: var(--wine-dark);
+      background: rgba(122, 31, 61, 0.06);
+      border-left: 3px solid var(--wine);
+      padding: 6px 8px;
+      margin-top: 6px;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .popup-particularite .label {
+      font-family: var(--font);
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--wine);
+    }
+
+    .marker-pin {
+      width: 26px;
+      height: 26px;
+      border-radius: 50% 50% 50% 0;
+      background: var(--wine);
+      transform: rotate(-45deg);
+      border: 2px solid #fff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 60px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+      font-size: 12.5px;
+      color: var(--ink-soft);
+      font-family: var(--font);
+    }
+
+    @media (max-width: 560px) {
+
+      /* En-tête mobile : les logos restent toujours dans la largeur de l'écran */
+      header.top {
+        padding: 28px 12px 32px;
+      }
+
+      .header-logos {
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .header-logos .logo-icv {
+        width: 100px;
+      }
+
+      .header-logos .logo-oenobox {
+        width: 160px;
+      }
+
+      h1 {
+        font-size: clamp(30px, 9vw, 42px);
+      }
+
+      .sub {
+        font-size: 17px;
+      }
+
+      .day-tabs {
+        margin-top: 28px;
+        gap: 6px;
+      }
+
+      .day-tab {
+        font-size: 12px;
+        padding: 9px 13px;
+      }
+
+      .timeline::before {
+        left: 52px;
+      }
+
+      .stop {
+        grid-template-columns: 52px 1fr;
+        gap: 14px;
+      }
+
+      .stop-time {
+        font-size: 12px;
+      }
+
+      .stop-time::after {
+        right: -19px;
+      }
+
+      #map-container {
+        height: 620px;
+        max-width: 100%;
+      }
+
+      .map-intro {
+        display: block;
+      }
+
+      .map-intro-note {
+        margin-top: 3px;
+      }
+
+      .map-table th,
+      .map-table td {
+        padding: 7px 6px;
+      }
+
+      .map-table th,
+      .map-table td {
+        font-size: 11.5px;
+      }
+
+      .col-num {
+        width: 7%;
+      }
+
+      .col-commune {
+        width: 18%;
+      }
+
+      .col-site {
+        width: 33%;
+      }
+
+      .col-navette {
+        width: 42%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="header-logos">
+        <a href="https://www.icv.fr" target="_blank" rel="noopener noreferrer" aria-label="Groupe ICV">
+          <img class="logo-icv" src="Logo.jpg" alt="Logo Groupe ICV">
+        </a>
+        <a href="https://oenobox.icv.fr/login" target="_blank" rel="noopener noreferrer" aria-label="Oenobox">
+          <img class="logo-oenobox" src="oenobox.png" alt="Oenobox">
+        </a>
+      </div>
+      <h2><em>ICV Provence</em></h2>
+      <h1>Points de collecte<br>2026-2027</h1>
+      <p class="sub">Tournées actives toute l'année sauf jour férié.<br>Fermeture annuelle du laboratoire entre Noël et le 1er janvier</p>
+      <div class="vine-rule"></div>
+      <!-- Bandeau rouge masqué : pour le réafficher, supprimer style="display:none" -->
+      <p class="notice-saturday" style="display:none">Le laboratoire est ouvert du lundi au vendredi.</p>
+    </header>
+
+    <div class="search-wrap" id="searchWrap">
+      <label class="search-label" for="searchInput">Rechercher un point de collecte par commune</label>
+      <div class="search-box">
+        <input type="text" id="searchInput" class="search-input" placeholder="Tapez le nom d'une commune…"
+          autocomplete="off">
+        <button type="button" id="searchClear" class="search-clear" aria-label="Effacer la recherche"
+          style="display:none;">✕</button>
+        <div id="searchSuggestions" class="search-suggestions"></div>
+      </div>
+      <div id="searchResult"></div>
+    </div>
+
+    <nav class="day-tabs" id="dayTabs"></nav>
+    <div class="sector-filter-wrap" id="sectorFilterWrap"></div>
+    <p class="helper-text" id="helperText">L'échantillon doit être déposé <strong>avant l'horaire de navette</strong>
+      indiqué pour votre point de collecte.</p>
+
+    <div id="content"></div>
+
+    <footer>ICV Provence · Accueil <a href="tel:+33494370190">04 94 37 01 90</a></footer>
+  </div>
+
+  <script>
+    /* ================================================================
+       DONNÉES — modifiez cette section pour ajouter/corriger un point
+       ================================================================
+       Source UNIQUE : DATA.sites (un objet par point de collecte).
+       Chaque point contient ses infos générales (commune, site, secteur,
+       horaires de dépôt, lieu_depot, adresse, particularite, lat, lng)
+       UNE SEULE FOIS, et un tableau "jours_navette" qui regroupe les
+       jours partageant le même horaire de navette, ex :
+         "jours_navette": [
+           { "jours": ["lundi"], "jours_label": "lundi",
+             "navette": "12h45", "horaires": "8h-12h" },
+           { "jours": ["jeudi"], "jours_label": "jeudi",
+             "navette": "8h40", "horaires": "8h-12h / 14h-17h" }
+         ]
+       "horaires" dans un groupe est FACULTATIF : il n'est présent que
+       lorsque les horaires de dépôt changent selon le jour. La vue "par
+       jour" affiche alors l'horaire du jour ; les fiches affichent le
+       champ "horaires" général du point (qui récapitule les deux).
+       Pour changer un horaire qui s'applique à plusieurs jours, il
+       suffit de modifier la valeur "navette" de CE SEUL groupe.
+       Pour scinder un jour du groupe (horaire différent un jour donné),
+       retirez ce jour du tableau "jours" du groupe existant et créez un
+       nouveau groupe { "jours": ["ce_jour"], "jours_label": "ce_jour",
+       "navette": "nouvel_horaire" }.
+       La vue "par jour" (frise) et la carte sont calculées automatiquement
+       au chargement à partir de DATA.sites (voir getDayEntries()).
+       jours_label doit rester en minuscules, et compresser les séquences
+       de 3 jours consécutifs ou plus en "X au Y" (sinon jours séparés
+       par " / ").
+       ================================================================ */
+    /* BUILD_VERSION : à incrémenter (date/heure) à chaque régénération du
+       fichier — c'est ce que compare le script anti-cache en bas de page
+       pour détecter qu'une version plus récente est en ligne. */
+    const BUILD_VERSION = "2026-10-16T21";
+    const DATA = {
+      "sites": [
+        {
+          "commune": "Brignoles",
+          "site": "ICV Centre œnologique de Provence",
+          "horaires": "8h-12h / 14h-17h à l'accueil ou en continu dans le local de dépôt",
+          "lieu_depot": "à l'accueil ou dans le local de dépôt (à proximité du portail du parking du personnel), accessible 24h/24 7j/7 avec digicode 2020",
+          "adresse": "86 chemin du Plan",
+          "particularite": "",
+          "secteur": "Provence Verte",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi",
+                "mardi",
+                "mercredi",
+                "jeudi",
+                "vendredi"
+              ],
+              "jours_label": "lundi au vendredi",
+              "navette": "24h/24"
+            }
+          ],
+          "lat": 43.4044181,
+          "lng": 6.0431078
+        },
+        {
+          "commune": "La Tour d'Aigues",
+          "site": "ICV La Tour d'Aigues",
+          "horaires": "8h-19h en continu",
+          "lieu_depot": "porte latérale droite du centre avec digicode : 2007A",
+          "adresse": "313 boulevard Saint-Roch",
+          "particularite": "",
+          "secteur": "Luberon",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi",
+                "mardi",
+                "mercredi",
+                "jeudi",
+                "vendredi"
+              ],
+              "jours_label": "lundi au vendredi",
+              "navette": "10h00"
+            }
+          ],
+          "lat": 43.7226251,
+          "lng": 5.5433631
+        },
+        {
+          "commune": "Valserres",
+          "site": "La Cave des Hautes Vignes",
+          "horaires": "pas d'horaires, accès libre",
+          "lieu_depot": "caisse extérieure à droite de la cave près de la clim.",
+          "adresse": "1 chemin de la Grande Hauche",
+          "particularite": "collecte le 1er lundi de chaque mois",
+          "secteur": "Hautes Alpes",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi"
+              ],
+              "jours_label": "lundi",
+              "navette": "14h00"
+            }
+          ],
+          "lat": 44.4913753,
+          "lng": 6.1217581
+        },
+        {
+          "commune": "La Saulce",
+          "site": "Domaine St André",
+          "horaires": "pas d'horaires, accès libre",
+          "lieu_depot": "caisse extérieure (sur la droite de la grande porte de la cave)",
+          "adresse": "1234 avenue de Fouillouse",
+          "particularite": "collecte le 1er lundi de chaque mois",
+          "secteur": "Alpes de Haute Provence",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi"
+              ],
+              "jours_label": "lundi",
+              "navette": "14h15"
+            }
+          ],
+          "lat": 44.450539,
+          "lng": 6.02012
+        },
+        {
+          "commune": "Volx",
+          "site": "Cave La Madeleine",
+          "horaires": "pas d'horaires, accès libre",
+          "lieu_depot": "caisse extérieure",
+          "adresse": "route de Volx",
+          "particularite": "collecte le 1er lundi de chaque mois",
+          "secteur": "Alpes de Haute Provence",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi"
+              ],
+              "jours_label": "lundi",
+              "navette": "15h15"
+            }
+          ],
+          "lat": 43.8550112,
+          "lng": 5.8282715
+        },
+        {
+          "commune": "Upaix",
+          "site": "Villa Costebelle - Cave",
+          "horaires": "pas d'horaires, accès libre",
+          "lieu_depot": "sous le hangar au fond à gauche",
+          "adresse": "Rourebeau",
+          "particularite": "collecte le 1er lundi de chaque mois",
+          "secteur": "Hautes Alpes",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi"
+              ],
+              "jours_label": "lundi",
+              "navette": "14h30"
+            }
+          ],
+          "lat": 44.3119842,
+          "lng": 5.8887055
+        },
+        {
+          "commune": "Pierrevert",
+          "site": "SCA Pierrevert",
+          "horaires": "pas d'horaires, libre service",
+          "lieu_depot": "caisse derrière la porte sous l'escalier, code accès pour la porte : 007",
+          "adresse": "1 avenue Auguste Bastide",
+          "particularite": "",
+          "secteur": "Alpes de Haute Provence",
+          "jours_navette": [
+            {
+              "jours": [
+                "mercredi"
+              ],
+              "jours_label": "mercredi",
+              "navette": "9h30"
+            }
+          ],
+          "lat": 43.8106492,
+          "lng": 5.7500861
+        },
+        {
+          "commune": "Cuers",
+          "site": "Cave Saint Roch les Vignes",
+          "horaires": "lundi : 8h-12h · jeudi : 8h-12h / 14h-17h",
+          "lieu_depot": "entrée latérale droite de la cave, puis second bureau (labo) sur la gauche dans le couloir",
+          "adresse": "22 boulevard Gambetta",
+          "particularite": "",
+          "secteur": "Zone des Maures",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi"
+              ],
+              "jours_label": "lundi",
+              "navette": "12h45",
+              "horaires": "8h-12h"
+            },
+            {
+              "jours": [
+                "jeudi"
+              ],
+              "jours_label": "jeudi",
+              "navette": "8h40",
+              "horaires": "8h-12h / 14h-17h"
+            }
+          ],
+          "lat": 43.237878,
+          "lng": 6.0801949
+        },
+        {
+          "commune": "Pierrefeu",
+          "site": "Château La Gordonne",
+          "horaires": "lundi : 8h-12h · jeudi : 8h-12h / 14h-17h",
+          "lieu_depot": "caisse devant la porte d'entrée de la cave",
+          "adresse": "route de Cuers",
+          "particularite": "",
+          "secteur": "Zone des Maures",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi"
+              ],
+              "jours_label": "lundi",
+              "navette": "13h00",
+              "horaires": "8h-12h"
+            },
+            {
+              "jours": [
+                "jeudi"
+              ],
+              "jours_label": "jeudi",
+              "navette": "8h45",
+              "horaires": "8h-12h / 14h-17h"
+            }
+          ],
+          "lat": 43.2246201,
+          "lng": 6.1286267
+        },
+        {
+          "commune": "Puget-Ville",
+          "site": "Cellier Saint Sidoine",
+          "horaires": "8h-12h",
+          "lieu_depot": "entrée de la cave",
+          "adresse": "12 rue de la Libération",
+          "particularite": "",
+          "secteur": "Zone des Maures",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi"
+              ],
+              "jours_label": "lundi",
+              "navette": "12h45"
+            },
+            {
+              "jours": [
+                "jeudi"
+              ],
+              "jours_label": "jeudi",
+              "navette": "8h30"
+            }
+          ],
+          "lat": 43.2866514,
+          "lng": 6.1341697
+        },
+        {
+          "commune": "Pierrefeu",
+          "site": "Les Vignerons de Pierrefeu",
+          "horaires": "lundi : 8h-12h · jeudi : 8h-12h / 14h-17h",
+          "lieu_depot": "entrée de la cave",
+          "adresse": "avenue Léon Blum",
+          "particularite": "",
+          "secteur": "Zone des Maures",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi"
+              ],
+              "jours_label": "lundi",
+              "navette": "13h00",
+              "horaires": "8h-12h"
+            },
+            {
+              "jours": [
+                "jeudi"
+              ],
+              "jours_label": "jeudi",
+              "navette": "8h45",
+              "horaires": "8h-12h / 14h-17h"
+            }
+          ],
+          "lat": 43.2304322,
+          "lng": 6.1491559
+        },
+        {
+          "commune": "Les Arcs sur Argens",
+          "site": "Le Cellier des Archers",
+          "horaires": "8h-12h / 14h-17h",
+          "lieu_depot": "caisse sur la grande terrasse à gauche du site",
+          "adresse": "RN7, rond-point du Pont d'Argens",
+          "particularite": "",
+          "secteur": "Dracénie",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi"
+              ],
+              "jours_label": "lundi",
+              "navette": "10h00"
+            },
+            {
+              "jours": [
+                "jeudi"
+              ],
+              "jours_label": "jeudi",
+              "navette": "10h15"
+            }
+          ],
+          "lat": 43.447091,
+          "lng": 6.475438
+        },
+        {
+          "commune": "Gonfaron",
+          "site": "Les Vignerons de Gonfaron",
+          "horaires": "8h-12h",
+          "lieu_depot": "caisse dans la cave, à droite des bureaux",
+          "adresse": "25 route de Pignans",
+          "particularite": "",
+          "secteur": "Cœur du Var",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi"
+              ],
+              "jours_label": "lundi",
+              "navette": "12h30"
+            },
+            {
+              "jours": [
+                "jeudi"
+              ],
+              "jours_label": "jeudi",
+              "navette": "9h00"
+            }
+          ],
+          "lat": 43.3178202,
+          "lng": 6.2828628
+        },
+        {
+          "commune": "La Londe les Maures",
+          "site": "Château La Tour Saint Honoré",
+          "horaires": "8h-14h en continu",
+          "lieu_depot": "façade nord sous l'escalier en colimaçon en béton",
+          "adresse": "602 chemin du Bas Pansard",
+          "particularite": "",
+          "secteur": "Zone des Maures",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi"
+              ],
+              "jours_label": "lundi",
+              "navette": "13h30"
+            },
+            {
+              "jours": [
+                "mercredi"
+              ],
+              "jours_label": "mercredi",
+              "navette": "12h30"
+            }
+          ],
+          "lat": 43.1442718,
+          "lng": 6.2148412
+        },
+        {
+          "commune": "Grimaud",
+          "site": "SCV les Vignerons de Grimaud",
+          "horaires": "lundi : 8h-12h / 13h30-17h30 · mercredi : 8h-12h",
+          "lieu_depot": "en bas des escaliers des bureaux",
+          "adresse": "36 avenue des Oliviers",
+          "particularite": "",
+          "secteur": "Golfe de St Tropez",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi"
+              ],
+              "jours_label": "lundi",
+              "navette": "14h30",
+              "horaires": "8h-12h / 13h30-17h30"
+            },
+            {
+              "jours": [
+                "mercredi"
+              ],
+              "jours_label": "mercredi",
+              "navette": "13h30",
+              "horaires": "8h-12h"
+            }
+          ],
+          "lat": 43.2687122,
+          "lng": 6.5313952
+        },
+        {
+          "commune": "Gassin",
+          "site": "Les Maîtres Vignerons de la Presqu'île de Saint Tropez",
+          "horaires": "en continu",
+          "lieu_depot": "caisse au niveau du service des expéditions à côté du quai de chargement",
+          "adresse": "270 route départementale 98",
+          "particularite": "",
+          "secteur": "Golfe de St Tropez",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi"
+              ],
+              "jours_label": "lundi",
+              "navette": "14h30"
+            },
+            {
+              "jours": [
+                "mercredi"
+              ],
+              "jours_label": "mercredi",
+              "navette": "13h30"
+            },
+            {
+              "jours": [
+                "jeudi"
+              ],
+              "jours_label": "jeudi",
+              "navette": "13h00"
+            }
+          ],
+          "lat": 43.2611566,
+          "lng": 6.5730814
+        },
+        {
+          "commune": "Vidauban",
+          "site": "La Vidaubanaise",
+          "horaires": "8h-12h / 14h-17h",
+          "lieu_depot": "petite porte bleue au milieu de la façade de la cave",
+          "adresse": "89 chemin de Sainte-Anne",
+          "particularite": "",
+          "secteur": "Dracénie",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi"
+              ],
+              "jours_label": "lundi",
+              "navette": "15h30"
+            }
+          ],
+          "lat": 43.4315156,
+          "lng": 6.4325774
+        },
+        {
+          "commune": "Flassans",
+          "site": "Le Comptoir des Vins de Flassans",
+          "horaires": "8h-12h / 14h-17h",
+          "lieu_depot": "caveau de vente",
+          "adresse": "avenue du Général-de-Gaulle",
+          "particularite": "",
+          "secteur": "Cœur du Var",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi"
+              ],
+              "jours_label": "lundi",
+              "navette": "10h30"
+            },
+            {
+              "jours": [
+                "jeudi"
+              ],
+              "jours_label": "jeudi",
+              "navette": "9h15"
+            }
+          ],
+          "lat": 43.3716469,
+          "lng": 6.2259789
+        },
+        {
+          "commune": "Flayosc",
+          "site": "Le Cellier des 3 Collines",
+          "horaires": "8h-12h / 14h-17h",
+          "lieu_depot": "caisse au niveau des quais de réception",
+          "adresse": "1 chemin du Michelage",
+          "particularite": "",
+          "secteur": "Dracénie",
+          "jours_navette": [
+            {
+              "jours": [
+                "jeudi"
+              ],
+              "jours_label": "jeudi",
+              "navette": "10h00"
+            }
+          ],
+          "lat": 43.5339593,
+          "lng": 6.4057539
+        },
+        {
+          "commune": "Pourrières",
+          "site": "Cellier Marius Caïus",
+          "horaires": "mardi : 8h-12h / 14h-17h · jeudi : 8h-12h",
+          "lieu_depot": "cave",
+          "adresse": "47 Grand'Rue",
+          "particularite": "",
+          "secteur": "Provence Verte",
+          "jours_navette": [
+            {
+              "jours": [
+                "mardi"
+              ],
+              "jours_label": "mardi",
+              "navette": "8h15",
+              "horaires": "8h-12h / 14h-17h"
+            },
+            {
+              "jours": [
+                "jeudi"
+              ],
+              "jours_label": "jeudi",
+              "navette": "10h30",
+              "horaires": "8h-12h"
+            }
+          ],
+          "lat": 43.5018573,
+          "lng": 5.7341818
+        },
+        {
+          "commune": "St Maximin",
+          "site": "Cellier de la Sainte Baume",
+          "horaires": "8h-12h / 13h30-17h",
+          "lieu_depot": "caisse extérieure à gauche de la porte centrale de la cave.",
+          "adresse": "route de Barjols",
+          "particularite": "",
+          "secteur": "Provence Verte",
+          "jours_navette": [
+            {
+              "jours": [
+                "mardi"
+              ],
+              "jours_label": "mardi",
+              "navette": "11h00"
+            },
+            {
+              "jours": [
+                "jeudi"
+              ],
+              "jours_label": "jeudi",
+              "navette": "10h00"
+            }
+          ],
+          "lat": 43.4629896,
+          "lng": 5.8658826
+        },
+        {
+          "commune": "Le Muy",
+          "site": "Château du Rouët",
+          "horaires": "8h30-12h / 14h-18h",
+          "lieu_depot": "derrière la porte des bureaux, sous l'escalier",
+          "adresse": "D47, route de Bagnols",
+          "particularite": "",
+          "secteur": "Dracénie",
+          "jours_navette": [
+            {
+              "jours": [
+                "mardi"
+              ],
+              "jours_label": "mardi",
+              "navette": "13h30"
+            }
+          ],
+          "lat": 43.519621,
+          "lng": 6.61926
+        },
+        {
+          "commune": "La Cadière d'Azur",
+          "site": "Les Vignerons de la Cadiérenne",
+          "horaires": "8h-12h / 14h-17h",
+          "lieu_depot": "caisse au niveau du second bâtiment sur la droite après l'entrée sur le site",
+          "adresse": "565 route départementale 66, quartier Le Vallon",
+          "particularite": "",
+          "secteur": "Bandol",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi",
+                "mercredi"
+              ],
+              "jours_label": "lundi / mercredi",
+              "navette": "9h00"
+            }
+          ],
+          "lat": 43.192677,
+          "lng": 5.761213
+        },
+        {
+          "commune": "Rougiers",
+          "site": "Les Vignerons de la Sainte Baume",
+          "horaires": "8h-12h / 14h-17h",
+          "lieu_depot": "caveau de vente",
+          "adresse": "les Fauvières",
+          "particularite": "",
+          "secteur": "Provence Verte",
+          "jours_navette": [
+            {
+              "jours": [
+                "mercredi"
+              ],
+              "jours_label": "mercredi",
+              "navette": "10h00"
+            }
+          ],
+          "lat": 43.3930241,
+          "lng": 5.8546314
+        },
+        {
+          "commune": "Le Val",
+          "site": "Cabinet d'Agronomie Provençale",
+          "horaires": "mardi 14h-17h / mercredi 8h-11h",
+          "lieu_depot": "au niveau de la salle de dégustation du CAP",
+          "adresse": "580 chemin de Saint-Georges",
+          "particularite": "",
+          "secteur": "Provence Verte",
+          "jours_navette": [
+            {
+              "jours": [
+                "mercredi"
+              ],
+              "jours_label": "mercredi",
+              "navette": "10h30"
+            }
+          ],
+          "lat": 43.4402279,
+          "lng": 6.0943995
+        },
+        {
+          "commune": "Le Thoronet",
+          "site": "La Guilde des Vignerons",
+          "horaires": "9h30-12h30 / 15h-19h",
+          "lieu_depot": "caisse devant le magasin",
+          "adresse": "20 boulevard du 17-Août-1944",
+          "particularite": "",
+          "secteur": "Cœur du Var",
+          "jours_navette": [
+            {
+              "jours": [
+                "mercredi"
+              ],
+              "jours_label": "mercredi",
+              "navette": "11h15"
+            }
+          ],
+          "lat": 43.4517007,
+          "lng": 6.3018425
+        },
+        {
+          "commune": "Le Pradet",
+          "site": "Clos Cibonne",
+          "horaires": "8h-12h",
+          "lieu_depot": "à l'extérieur devant l'entrée de la cave",
+          "adresse": "chemin de la Cibonne",
+          "particularite": "",
+          "secteur": "Zone des Maures",
+          "jours_navette": [
+            {
+              "jours": [
+                "mercredi"
+              ],
+              "jours_label": "mercredi",
+              "navette": "13h00"
+            }
+          ],
+          "lat": 43.1015039,
+          "lng": 6.0400397
+        },
+        {
+          "commune": "Aix en Provence",
+          "site": "Les Vignerons d'Aix en Provence",
+          "horaires": "pas d'horaires, libre service",
+          "lieu_depot": "caisse à l'arrière de la cave",
+          "adresse": "2005 route de Berre",
+          "particularite": "",
+          "secteur": "Bouches du Rhône",
+          "jours_navette": [
+            {
+              "jours": [
+                "jeudi"
+              ],
+              "jours_label": "jeudi",
+              "navette": "8h00"
+            }
+          ],
+          "lat": 43.5351528,
+          "lng": 5.3921526
+        },
+        {
+          "commune": "Rousset",
+          "site": "Domaine Terre de Mistral",
+          "horaires": "8h-12h",
+          "lieu_depot": "cave",
+          "adresse": "chemin du Pavillon - route de Peynier",
+          "particularite": "",
+          "secteur": "Bouches du Rhône",
+          "jours_navette": [
+            {
+              "jours": [
+                "jeudi"
+              ],
+              "jours_label": "jeudi",
+              "navette": "10h30"
+            }
+          ],
+          "lat": 43.4707208,
+          "lng": 5.6284011
+        },
+        {
+          "commune": "Rousset",
+          "site": "Cave de Rousset",
+          "horaires": "8h-12h / 14h-17h",
+          "lieu_depot": "cave entrée latérale",
+          "adresse": "quartier Saint-Joseph",
+          "particularite": "",
+          "secteur": "Bouches du Rhône",
+          "jours_navette": [
+            {
+              "jours": [
+                "mardi"
+              ],
+              "jours_label": "mardi",
+              "navette": "8h30"
+            }
+          ],
+          "lat": 43.4827698,
+          "lng": 5.6238352
+        },
+        {
+          "commune": "Lambesc",
+          "site": "Domaine des Béates",
+          "horaires": "pas d'horaires, libre service",
+          "lieu_depot": "en extérieur sous abri devant la cave",
+          "adresse": "837 route de Caireval",
+          "particularite": "",
+          "secteur": "Bouches du Rhône",
+          "jours_navette": [
+            {
+              "jours": [
+                "mardi"
+              ],
+              "jours_label": "mardi",
+              "navette": "9h30"
+            }
+          ],
+          "lat": 43.6629203,
+          "lng": 5.2782631
+        },
+        {
+          "commune": "Lançon de Provence",
+          "site": "Château Calissanne",
+          "horaires": "pas d'horaires, libre service",
+          "lieu_depot": "cabanon couvert non fermé, à l'entrée du domaine entre le caveau et la cave",
+          "adresse": "route départementale 10",
+          "particularite": "",
+          "secteur": "Bouches du Rhône",
+          "jours_navette": [
+            {
+              "jours": [
+                "mardi"
+              ],
+              "jours_label": "mardi",
+              "navette": "10h15"
+            }
+          ],
+          "lat": 43.5453804,
+          "lng": 5.1362438
+        },
+        {
+          "commune": "Auriol",
+          "site": "Les Vignerons du Garlaban",
+          "horaires": "9h-12h / 15h-19h",
+          "lieu_depot": "caveau de vente",
+          "adresse": "route de Saint-Zacharie",
+          "particularite": "",
+          "secteur": "Bouches du Rhône",
+          "jours_navette": [
+            {
+              "jours": [
+                "mercredi"
+              ],
+              "jours_label": "mercredi",
+              "navette": "9h40"
+            }
+          ],
+          "lat": 43.3681327,
+          "lng": 5.6527568
+        },
+        {
+          "commune": "St Julien les Martigues",
+          "site": "SCA La Venise Provençale",
+          "horaires": "pas d'horaires, libre service",
+          "lieu_depot": "caisse située à droite du caveau de vente, tout au fond sous un porche",
+          "adresse": "223 route de Sausset",
+          "particularite": "collecte à la demande par SMS de notre coursier au 07 77 94 60 73",
+          "secteur": "Bouches du Rhône",
+          "jours_navette": [
+            {
+              "jours": [
+                "lundi"
+              ],
+              "jours_label": "lundi",
+              "navette": "11h00"
+            }
+          ],
+          "lat": 43.3677055,
+          "lng": 5.0875256
+        },
+        {
+          "commune": "Sénas",
+          "site": "Coopérative vinicole de Sénas (à proximité de la gare)",
+          "horaires": "mardi : à partir de 8h · jeudi : 8h-12h / 14h-17h",
+          "lieu_depot": "caisse située au niveau du quai de déchargement, sur la droite après le portail",
+          "adresse": "quai de la Capelette",
+          "particularite": "",
+          "secteur": "Bouches du Rhône",
+          "jours_navette": [
+            {
+              "jours": [
+                "mardi"
+              ],
+              "jours_label": "mardi",
+              "navette": "9h00",
+              "horaires": "à partir de 8h"
+            },
+            {
+              "jours": [
+                "jeudi"
+              ],
+              "jours_label": "jeudi",
+              "navette": "9h00",
+              "horaires": "8h-12h / 14h-17h"
+            }
+          ],
+          "lat": 43.738814,
+          "lng": 5.0736076
+        },
+        {
+          "commune": "Nice",
+          "site": "Château de Bellet",
+          "horaires": "pas d'horaires, libre service",
+          "lieu_depot": "caisse au 325 chemin de Saquier",
+          "adresse": "325 chemin de Saquier",
+          "particularite": "collecte à la demande par SMS de notre coursier au 07 77 94 60 73, le jour même avant 12h",
+          "secteur": "Nice",
+          "jours_navette": [
+            {
+              "jours": [
+                "mardi"
+              ],
+              "jours_label": "mardi",
+              "navette": "14h30"
+            }
+          ],
+          "lat": 43.7498636,
+          "lng": 7.212625
+        },
+        {
+          "commune": "Lauris",
+          "site": "Domaine de Fontenille",
+          "horaires": "",
+          "lieu_depot": "domaine",
+          "adresse": "route de Roquefraîche",
+          "particularite": "",
+          "secteur": "Luberon",
+          "jours_navette": [
+            {
+              "jours": [
+                "jeudi"
+              ],
+              "jours_label": "jeudi",
+              "navette": "9h30"
+            }
+          ],
+          "lat": 43.7627285,
+          "lng": 5.3011837
+        },
+        {
+          "commune": "Brue Auriac",
+          "site": "Cave Fontaillade",
+          "horaires": "7h-12h / 14h-17h",
+          "lieu_depot": "casiers ICV à l'arrière de la cave",
+          "adresse": "avenue de St Maximin",
+          "particularite": "",
+          "secteur": "Provence Verte",
+          "jours_navette": [
+            {
+              "jours": [
+                "jeudi"
+              ],
+              "jours_label": "jeudi",
+              "navette": "10h15"
+            }
+          ],
+          "lat": 43.5266500440924,
+          "lng": 5.94109742084169
+        }
+      ]
+    };
+    const DAYS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'];
+    let current = 'carte'; // vue affichée au chargement : 'carte' | 'tous' | 'lundi'...
+    let mapInstance = null;
+    let mapMarkers = [];
+    let mapDayFilter = 'tous';
+    let sectorFilter = 'tous';
+
+    /* ---------------- Dérivation de la vue "par jour" depuis DATA.sites ----------------
+       Convertit un horaire "8h30" en minutes pour le tri chronologique.
+       Les valeurs non reconnues (ex : "24h/24") sont placées en fin de liste. */
+    function navetteToMinutes(navette) {
+      const m = /^(\d{1,2})h(\d{2})$/.exec(navette || '');
+      if (!m) return Infinity;
+      return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+    }
+    function getDayEntries(day) {
+      const entries = [];
+      DATA.sites.forEach(s => {
+        const grp = s.jours_navette.find(jn => jn.jours.includes(day));
+        if (!grp) return;
+        entries.push({
+          commune: s.commune,
+          site: s.site,
+          horaires: grp.horaires || s.horaires,
+          navette: grp.navette,
+          lieu_depot: s.lieu_depot,
+          adresse: s.adresse,
+          particularite: s.particularite,
+          secteur: s.secteur,
+          lat: s.lat,
+          lng: s.lng
+        });
+      });
+      entries.sort((a, b) => navetteToMinutes(a.navette) - navetteToMinutes(b.navette));
+      return entries;
+    }
+
+    /* ---------------- Filtre secteur (transversal aux 3 vues) ---------------- */
+    function getSectors() {
+      return [...new Set(DATA.sites.map(s => s.secteur).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
+    }
+    function renderSectorFilter() {
+      const wrap = document.getElementById('sectorFilterWrap');
+      const sectors = getSectors();
+      wrap.innerHTML = `
+    <span class="sector-filter-label">Secteur</span>
+    <select class="sector-select" id="sectorSelect">
+      <option value="tous">Tous les secteurs</option>
+      ${sectors.map(s => `<option value="${s}">${s}</option>`).join('')}
+    </select>`;
+      const select = document.getElementById('sectorSelect');
+      select.value = sectorFilter;
+      select.onchange = (e) => { sectorFilter = e.target.value; render(); };
+    }
+
+    /* ---------------- Onglets ---------------- */
+    function renderTabs() {
+      const tabs = document.getElementById('dayTabs');
+      tabs.innerHTML = '';
+
+      const mapBtn = document.createElement('button');
+      mapBtn.className = 'day-tab map-tab' + (current === 'carte' ? ' active' : '');
+      mapBtn.textContent = '🗺 Carte';
+      mapBtn.onclick = () => { current = 'carte'; render(); };
+      tabs.appendChild(mapBtn);
+
+      const allBtn = document.createElement('button');
+      allBtn.className = 'day-tab' + (current === 'tous' ? ' active' : '');
+      allBtn.innerHTML = 'Tous les points';
+      allBtn.onclick = () => { current = 'tous'; render(); };
+      tabs.appendChild(allBtn);
+
+      DAYS.forEach(d => {
+        const btn = document.createElement('button');
+        btn.className = 'day-tab' + (current === d ? ' active' : '');
+        btn.innerHTML = d;
+        btn.onclick = () => { current = d; render(); };
+        tabs.appendChild(btn);
+      });
+    }
+
+    /* ---------------- Vue "par jour" (frise chronologique) ---------------- */
+    function renderDayView(day) {
+      const stops = getDayEntries(day).filter(s => sectorFilter === 'tous' || s.secteur === sectorFilter);
+      const el = document.createElement('div');
+      el.className = 'timeline';
+      if (!stops.length) {
+        el.innerHTML = `<p class="no-results">Aucun point de collecte pour le secteur « ${sectorFilter} » ce jour-là.</p>`;
+        return el;
+      }
+      stops.forEach(s => {
+        const stop = document.createElement('div');
+        stop.className = 'stop';
+        stop.innerHTML = `
+      <div class="stop-time">${s.navette || '—'}</div>
+      <div class="stop-card">
+        <div class="stop-head">
+          <span class="stop-commune">${s.commune}</span>
+          <span class="stop-site">${s.site}</span>
+        </div>
+        ${s.adresse ? `<div class="stop-addr">${s.adresse}</div>` : ''}
+        <div class="stop-meta">
+          <div class="col"><span class="label">Horaires de dépôt</span>${s.horaires || '—'}</div>
+          <div class="col"><span class="label">Lieu de dépôt</span>${s.lieu_depot || '—'}</div>
+        </div>
+        ${s.particularite ? `<div class="particularite"><span class="label">Particularité</span>${s.particularite}</div>` : ''}
+      </div>`;
+        el.appendChild(stop);
+      });
+      return el;
+    }
+
+    /* ---------------- Vue "tous les points" (grille de fiches) ---------------- */
+    function buildSiteCard(s) {
+      const card = document.createElement('div');
+      card.className = 'site-card';
+      const badges = s.jours_navette.map(jn =>
+        `<span class="day-badge">${jn.jours_label} <b>${jn.navette || '—'}</b></span>`
+      ).join('');
+      card.innerHTML = `
+    <div class="stop-head">
+      <span class="stop-commune">${s.commune}</span>
+    </div>
+    <div class="stop-site" style="margin-bottom:4px;">${s.site}</div>
+    ${s.adresse ? `<div class="stop-addr">${s.adresse}</div>` : ''}
+    <div class="stop-meta">
+      <div class="col"><span class="label">Horaires de dépôt</span>${s.horaires || '—'}</div>
+      <div class="col"><span class="label">Lieu de dépôt</span>${s.lieu_depot || '—'}</div>
+    </div>
+    ${s.particularite ? `<div class="particularite"><span class="label">Particularité</span>${s.particularite}</div>` : ''}
+    <div class="day-badges">${badges}</div>`;
+      return card;
+    }
+
+    function renderAllView() {
+      const el = document.createElement('div');
+      el.className = 'grid';
+      const sites = DATA.sites.filter(s => sectorFilter === 'tous' || s.secteur === sectorFilter);
+      if (!sites.length) {
+        el.innerHTML = `<p class="no-results">Aucun point de collecte pour le secteur « ${sectorFilter} ».</p>`;
+        return el;
+      }
+      sites.forEach(s => el.appendChild(buildSiteCard(s)));
+      return el;
+    }
+
+    /* ---------------- Vue "Carte" (Leaflet) ---------------- */
+    function renderMapView() {
+      const el = document.createElement('div');
+
+      const toolbar = document.createElement('div');
+      toolbar.className = 'map-toolbar';
+      const filters = ['tous', ...DAYS];
+      filters.forEach(f => {
+        const btn = document.createElement('button');
+        btn.className = 'map-filter' + (mapDayFilter === f ? ' active' : '');
+        btn.textContent = f === 'tous' ? 'Tous les jours' : f;
+        btn.onclick = () => { mapDayFilter = f; renderMapMarkers(); renderMapTable(); updateMapFilterButtons(); };
+        btn.dataset.filter = f;
+        toolbar.appendChild(btn);
+      });
+      el.appendChild(toolbar);
+
+      const mapDiv = document.createElement('div');
+      mapDiv.id = 'map-container';
+      el.appendChild(mapDiv);
+
+      const tableWrap = document.createElement('div');
+      tableWrap.className = 'map-table-wrap';
+      tableWrap.id = 'map-table-wrap';
+      el.appendChild(tableWrap);
+      // Le conteneur n'est pas encore dans le DOM global ici : on lui passe donc directement la cible.
+      renderMapTable(tableWrap);
+
+      // Le rendu Leaflet doit se faire une fois le div inséré dans le DOM.
+      setTimeout(initMap, 0);
+
+      return el;
+    }
+    function renderMapTable(targetWrap) {
+      const wrap = targetWrap || document.getElementById('map-table-wrap');
+      if (!wrap) return;
+
+      const points = (mapDayFilter === 'tous' ? DATA.sites : getDayEntries(mapDayFilter))
+        .filter(p => sectorFilter === 'tous' || p.secteur === sectorFilter);
+      const title = mapDayFilter === 'tous' ? 'Toutes les collectes' : `Collectes du ${mapDayFilter}`;
+
+      wrap.innerHTML = `
+    <div class="map-table-heading">
+      <span class="map-table-title">${title}</span>
+      <span class="map-table-count">${points.length} point${points.length > 1 ? 's' : ''}</span>
+    </div>
+    <div class="table-scroll">
+    <table class="map-table">
+      <colgroup>
+        <col class="col-num">
+        <col class="col-commune">
+        <col class="col-site">
+        <col class="col-navette">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>N°</th>
+          <th>Commune</th>
+          <th>Lieu de collecte</th>
+          <th>Navette</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${points.map(p => {
+        const number = DATA.sites.findIndex(s => s.commune === p.commune && s.site === p.site) + 1;
+        const navette = mapDayFilter === 'tous'
+          ? p.jours_navette.map(jn => `${jn.jours_label} : ${jn.navette || '—'}`).join(' · ')
+          : (p.navette || '—');
+        return `
+            <tr>
+              <td class="num">${number}</td>
+              <td class="commune">${p.commune}</td>
+              <td class="site">${p.site}</td>
+              <td class="navette">${navette}</td>
+            </tr>`;
+      }).join('')}
+      </tbody>
+    </table>
+    </div>`;
+    }
+
+    function updateMapFilterButtons() {
+      document.querySelectorAll('.map-filter').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === mapDayFilter);
+      });
+    }
+
+    function initMap() {
+      if (mapInstance) { mapInstance.remove(); mapInstance = null; }
+      mapInstance = L.map('map-container', { scrollWheelZoom: true }).setView([43.57, 5.96], 9);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 18
+      }).addTo(mapInstance);
+      renderMapMarkers();
+    }
+
+    function renderMapMarkers() {
+      if (!mapInstance) return;
+      mapMarkers.forEach(m => mapInstance.removeLayer(m));
+      mapMarkers = [];
+
+      const points = (mapDayFilter === 'tous' ? DATA.sites : getDayEntries(mapDayFilter))
+        .filter(p => sectorFilter === 'tous' || p.secteur === sectorFilter);
+      const bounds = [];
+
+      points.forEach(p => {
+        if (p.lat == null || p.lng == null) return;
+
+        // Le numéro est calculé à partir de DATA.sites : aucune numérotation
+        // à maintenir manuellement lorsque vous ajoutez/supprimez un point.
+        const pointNumber = DATA.sites.findIndex(s =>
+          s.commune === p.commune && s.site === p.site
+        ) + 1;
+
+        const markerIcon = L.divIcon({
+          className: '',
+          html: `<div class="map-number">${pointNumber}</div>`,
+          iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -16]
+        });
+
+        const marker = L.marker([p.lat, p.lng], { icon: markerIcon }).addTo(mapInstance);
+        const jourInfo = mapDayFilter === 'tous'
+          ? p.jours_navette.map(jn => jn.jours_label + ' ' + (jn.navette || '')).join(' · ')
+          : (p.navette || '');
+        marker.bindPopup(
+          '<div class="popup-commune">' + p.commune + '</div>' +
+          '<div class="popup-site">' + p.site + '</div>' +
+          '<div class="popup-meta"><span class="label">Navette</span> ' + jourInfo + '</div>' +
+          (p.lieu_depot ? '<div class="popup-meta"><span class="label">Lieu de dépôt</span> ' + p.lieu_depot + '</div>' : '') +
+          (p.particularite ? '<div class="popup-particularite"><span class="label">Particularité</span> ' + p.particularite + '</div>' : '')
+        );
+        mapMarkers.push(marker);
+        bounds.push([p.lat, p.lng]);
+      });
+
+      if (bounds.length) {
+        mapInstance.invalidateSize();
+        mapInstance.fitBounds(bounds, { padding: [30, 30], maxZoom: 13 });
+      }
+    }
+
+    /* ---------------- Rendu principal ---------------- */
+    function render() {
+      renderTabs();
+      renderSectorFilter();
+      const helper = document.getElementById('helperText');
+      helper.style.display = current === 'carte' ? 'none' : 'block';
+
+      const content = document.getElementById('content');
+      content.innerHTML = '';
+      if (current === 'carte') {
+        content.appendChild(renderMapView());
+      } else if (current === 'tous') {
+        content.appendChild(renderAllView());
+      } else {
+        content.appendChild(renderDayView(current));
+      }
+    }
+
+    render();
+
+    /* ---------------- Recherche par commune ---------------- */
+    const searchInput = document.getElementById('searchInput');
+    const searchClear = document.getElementById('searchClear');
+    const searchSuggestionsEl = document.getElementById('searchSuggestions');
+    const searchResultEl = document.getElementById('searchResult');
+    let searchHighlightIndex = -1;
+    let currentSuggestions = [];
+
+    function normalize(str) {
+      return (str || '').toString().toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, ''); // retire les accents
+    }
+
+    function getSuggestions(query) {
+      const q = normalize(query);
+      if (!q) return [];
+      return DATA.sites
+        .filter(s => normalize(s.commune).includes(q))
+        .sort((a, b) => {
+          const aStarts = normalize(a.commune).startsWith(q) ? 0 : 1;
+          const bStarts = normalize(b.commune).startsWith(q) ? 0 : 1;
+          if (aStarts !== bStarts) return aStarts - bStarts;
+          return a.commune.localeCompare(b.commune, 'fr');
+        })
+        .slice(0, 8);
+    }
+
+    function renderSuggestions(list) {
+      currentSuggestions = list;
+      searchHighlightIndex = -1;
+      if (!list.length) {
+        searchSuggestionsEl.innerHTML = `<div class="search-empty">Aucune commune trouvée.</div>`;
+        searchSuggestionsEl.classList.add('open');
+        return;
+      }
+      searchSuggestionsEl.innerHTML = list.map((s, i) => `
+    <div class="search-suggestion" data-index="${i}">
+      <span class="sugg-commune">${s.commune}</span>
+      <span class="sugg-site">${s.site}</span>
+    </div>`).join('');
+      searchSuggestionsEl.classList.add('open');
+      searchSuggestionsEl.querySelectorAll('.search-suggestion').forEach(el => {
+        el.addEventListener('click', () => selectSite(list[parseInt(el.dataset.index, 10)]));
+      });
+    }
+
+    function closeSuggestions() {
+      searchSuggestionsEl.classList.remove('open');
+      searchSuggestionsEl.innerHTML = '';
+      currentSuggestions = [];
+      searchHighlightIndex = -1;
+    }
+
+    function selectSite(site) {
+      searchInput.value = site.commune;
+      closeSuggestions();
+      searchClear.style.display = 'flex';
+      searchResultEl.innerHTML = '';
+      searchResultEl.appendChild(buildSiteCard(site));
+      searchResultEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    searchInput.addEventListener('input', () => {
+      const val = searchInput.value;
+      searchClear.style.display = val ? 'flex' : 'none';
+      searchResultEl.innerHTML = '';
+      if (!val) { closeSuggestions(); return; }
+      renderSuggestions(getSuggestions(val));
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+      if (!currentSuggestions.length) return;
+      const items = searchSuggestionsEl.querySelectorAll('.search-suggestion');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        searchHighlightIndex = Math.min(searchHighlightIndex + 1, items.length - 1);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        searchHighlightIndex = Math.max(searchHighlightIndex - 1, 0);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (searchHighlightIndex >= 0) selectSite(currentSuggestions[searchHighlightIndex]);
+        return;
+      } else if (e.key === 'Escape') {
+        closeSuggestions();
+        return;
+      } else {
+        return;
+      }
+      items.forEach((el, i) => el.classList.toggle('highlighted', i === searchHighlightIndex));
+    });
+
+    searchClear.addEventListener('click', () => {
+      searchInput.value = '';
+      searchClear.style.display = 'none';
+      searchResultEl.innerHTML = '';
+      closeSuggestions();
+      searchInput.focus();
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!document.getElementById('searchWrap').contains(e.target)) {
+        closeSuggestions();
+      }
+    });
+
+    /* ================================================================
+       ANTI-CACHE — rechargement automatique en cas de nouvelle version
+       ================================================================
+       Sur GitHub Pages, le navigateur (et surtout un raccourci web ajouté
+       à l'écran d'accueil) peut continuer d'afficher une ancienne version
+       du fichier même après sa mise à jour sur GitHub. Ce script va
+       chercher la page en ligne (sans passer par le cache) et compare son
+       BUILD_VERSION à celui actuellement affiché : si une version plus
+       récente est détectée, la page se recharge automatiquement, sans
+       action de l'utilisateur.
+       Vérifications déclenchées : à la réouverture du raccourci/onglet
+       (visibilitychange, focus) et toutes les 5 minutes si la page reste
+       ouverte en continu.
+       ================================================================ */
+    function checkForUpdate() {
+      const url = window.location.href.split('#')[0].split('?')[0] + '?_=' + Date.now();
+      fetch(url, { cache: 'no-store' })
+        .then(res => res.text())
+        .then(html => {
+          const match = /BUILD_VERSION\s*=\s*"([^"]+)"/.exec(html);
+          if (match && match[1] !== BUILD_VERSION) {
+            location.reload();
+          }
+        })
+        .catch(() => { /* pas de réseau : on retentera au prochain déclencheur */ });
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkForUpdate();
+    });
+    window.addEventListener('focus', checkForUpdate);
+    setInterval(checkForUpdate, 5 * 60 * 1000);
+  </script>
+</body>
+
+</html>
