@@ -957,6 +957,8 @@
       <div class="vine-rule"></div>
       <!-- Bandeau rouge masqué : pour le réafficher, supprimer style="display:none" -->
       <p class="notice-saturday" style="display:none">Le laboratoire est ouvert du lundi au vendredi.</p>
+      <!-- Message temporaire : disparaît automatiquement à FIN_MESSAGE_TEMPORAIRE (voir script en bas de page) -->
+      <p class="notice-saturday" id="messageTemporaire">Tournées en vigueur à partir du lundi 26 octobre 2026</p>
     </header>
 
     <div class="search-wrap" id="searchWrap">
@@ -1015,7 +1017,7 @@
     /* BUILD_VERSION : à incrémenter (date/heure) à chaque régénération du
        fichier — c'est ce que compare le script anti-cache en bas de page
        pour détecter qu'une version plus récente est en ligne. */
-    const BUILD_VERSION = "2026-10-16T21";
+    const BUILD_VERSION = "2026-10-16T22";
     const DATA = {
       "sites": [
         {
@@ -2344,6 +2346,27 @@
     });
     window.addEventListener('focus', checkForUpdate);
     setInterval(checkForUpdate, 5 * 60 * 1000);
+  </script>
+
+  <script>
+    /* ================================================================
+       MESSAGE TEMPORAIRE — masqué automatiquement après une date
+       ================================================================
+       Le message rouge "Tournées en vigueur à partir du lundi 26 octobre
+       2026" s'affiche jusqu'au dimanche 1er novembre inclus, puis
+       disparaît tout seul le lundi 2 novembre à 0h00 (heure de Paris).
+       - Pour changer la date : modifier FIN_MESSAGE_TEMPORAIRE
+         (+01:00 = heure d'hiver, +02:00 = heure d'été).
+       - Pour le supprimer définitivement : effacer la ligne
+         id="messageTemporaire" plus haut et ce bloc <script>.
+       ================================================================ */
+    const FIN_MESSAGE_TEMPORAIRE = new Date('2026-11-02T00:00:00+01:00');
+    function verifierMessageTemporaire() {
+      const el = document.getElementById('messageTemporaire');
+      if (el && new Date() >= FIN_MESSAGE_TEMPORAIRE) el.style.display = 'none';
+    }
+    verifierMessageTemporaire();
+    setInterval(verifierMessageTemporaire, 60 * 1000);
   </script>
 </body>
 
